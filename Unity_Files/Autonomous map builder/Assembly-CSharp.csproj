@@ -49,7 +49,6 @@
      <Compile Include="Assets\_Scripts\Grid.cs" />
      <Compile Include="Assets\_Scripts\Node.cs" />
      <Compile Include="Assets\_Scripts\RobotController.cs" />
-     <Compile Include="Assets\_Scripts\RobotGrid.cs" />
  <Reference Include="UnityEngine.UI">
  <HintPath>/Volumes/Macintosh HD 2/Applications/Unity/Unity.app/Contents/UnityExtensions/Unity/GUISystem/UnityEngine.UI.dll</HintPath>
  </Reference>

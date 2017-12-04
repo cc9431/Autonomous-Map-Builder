@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class Grid : MonoBehaviour {
 	public float nodeRadius = 0.5f;
 	private Node[,] grid;
-	private int gridWait = 10;
+	private int drawWait = 10;
 	private Vector3 mouse;
 	private bool canDropWall;
 	private bool canDropRobot;
@@ -20,9 +20,11 @@ public class Grid : MonoBehaviour {
 	public Vector2 gridSize;
 	public GameObject wallPreFab;
 	public GameObject robotPreFab;
+	public GameObject emptyPreFab;
 	public Transform Walls;
 	public Slider Ysize;
 	public Slider Xsize;
+	public Slider radarStrength;
 	public Button Next;
 	public Text info;
 
@@ -44,7 +46,7 @@ public class Grid : MonoBehaviour {
 	}
 
 	private void Update(){
-		if (gridWait > 0) gridWait -= 1;
+		if (drawWait > 0) drawWait -= 1;
 		if (Input.GetButton("Fire1")) {
 			mouse = (Camera.main.ScreenToWorldPoint(Input.mousePosition));
 			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -57,6 +59,7 @@ public class Grid : MonoBehaviour {
 						mouseNode.notWall = false;
 					} else if (canDropRobot) {
 						Instantiate(robotPreFab, mouseNode.position, Quaternion.identity);
+						RobotController.radarStrength = radarStrength.value;
 						canDropRobot = false;
 						Next.interactable = true;
 					}
@@ -79,14 +82,14 @@ public class Grid : MonoBehaviour {
 	}
 	
 	public void setX(Slider s){
-		gridWait = 10;
+		drawWait = 10;
 		gridSize.x = s.value * 2;
 		resetSize();
 		calculateCameraSize();
 	}
 
 	public void setY(Slider s){
-		gridWait = 10;
+		drawWait = 10;
 		gridSize.y = s.value * 2;
 		resetSize();
 		calculateCameraSize();
@@ -110,8 +113,7 @@ public class Grid : MonoBehaviour {
 			canDropWall = false;
 			canDropRobot = false;
 			Next.interactable = true;
-		}
-		else if (state == 1){
+		} else if (state == 1){
 			info.text = "Draw Walls";
 			Xsize.gameObject.SetActive(false);
 			Ysize.gameObject.SetActive(false);
@@ -126,12 +128,13 @@ public class Grid : MonoBehaviour {
 			canDropRobot = true;
 			Next.interactable = false;
 			Next.GetComponentInChildren<Text>().text = "Run";
+			GenerateGrid();
 		} else if (state == 3){
-			//::Run simulation
 			info.text = "";
 			Next.gameObject.SetActive(false);
 			if (gridSize.x >= gridSize.y) camSize *= 2;
 			camPos = gridSize.x / 2 + 1;
+			//::Run simulation
 		}
 	}
 
@@ -145,12 +148,13 @@ public class Grid : MonoBehaviour {
 
 	private void calculateCameraSize(){
 		float size = camSize;
+		int extra = canDropWall?1:6;
 		if ((gridSize.y / Screen.height) > (gridSize.x / Screen.width)){
 			size = gridSize.y / 2;
 		} else {
 			size = (gridSize.x * Screen.height / Screen.width) / 2;
 		}
-		camSize = size + 1;
+		camSize = size + extra;
 	}
 
 	public void GenerateGrid(){
@@ -164,6 +168,10 @@ public class Grid : MonoBehaviour {
 				Vector2 worldPoint = bottomLeft + Vector2.right * (x * nodeDiameter + nodeRadius) + Vector2.up * (y * nodeDiameter + nodeRadius);
 				bool walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, walls));
 				grid[x,y] = new Node(false, walkable, worldPoint);
+				if (canDropRobot && walkable) {
+					GameObject empty = (GameObject) Instantiate(emptyPreFab, worldPoint, Quaternion.identity);
+					empty.transform.SetParent(Walls);
+				}
 			}
 		}
 	}
@@ -176,7 +184,7 @@ public class Grid : MonoBehaviour {
 	}
 
 	private void OnDrawGizmos() {
-		if (grid != null && gridWait == 0 && state < 2){
+		if (grid != null && drawWait == 0 && state < 2){
 			Node rb = nodeFromWorldPoint(mouse);
 			foreach(Node n in grid){
 				Color col = (n.notWall)?Color.white:Color.black;
