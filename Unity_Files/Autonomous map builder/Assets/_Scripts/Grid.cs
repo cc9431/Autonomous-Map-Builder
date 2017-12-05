@@ -5,29 +5,29 @@ using UnityEngine;
 using UnityEngine.UI;
 
 public class Grid : MonoBehaviour {
-	public float nodeRadius = 0.5f;
-	private Node[,] grid;
-	private int drawWait = 10;
-	private Vector3 mouse;
-	private bool canDropWall;
-	private bool canDropRobot;
-	private float camSize;
-	private float camPos;
-	public static Grid instance;
-	public int state = 0;
-	public float nodeDiameter;
-	public LayerMask wallsLayer;
-	public LayerMask notWallsLayer;
-	public Vector2 gridSize;
-	public GameObject wallPreFab;
-	public GameObject robotPreFab;
-	public GameObject emptyPreFab;
-	public Transform WallsParent;
-	public Slider Ysize;
-	public Slider Xsize;
-	public Slider radarStrength;
-	public Button Next;
-	public Text info;
+	public float nodeRadius = 0.5f;		// Half-size of node
+	private Node[,] grid;				// Real-world grid of nodes
+	private int drawWait = 10;			// Time that OnDrawGizmos must wait before re-drawing grid
+	private Vector3 mouse;				// Position of last mouse click
+	private bool canDropWall;			// Can the user put down walls?
+	private bool canDropRobot;			// Can the user place the robot?
+	private float camSize;				// Half-size that camera must move towards
+	private float camPos;				// Position that camera must move towards
+	public static Grid instance;		// Static instance of this Grid
+	public int state = 0;				// Current state of user interaction
+	public float nodeDiameter;			// Full-size of node
+	public LayerMask wallsLayer;		// LayerMask for Walls
+	public LayerMask notWallsLayer;		// LayerMask for empty Nodes
+	public Vector2 gridSize;			// 2D size of grid
+	public GameObject wallPreFab;		// Copy of wall gameobject
+	public GameObject robotPreFab;		// Copy of robot gameobject
+	public GameObject emptyPreFab;		// Copy of empty node gameobject (invisible box collider)
+	public Transform WallsParent;		// GameObject used for organizing wall and empty gameobjects
+	public Slider Ysize;				// Reference to UI Slider
+	public Slider Xsize;				// Reference to UI Slider
+	public Slider radarStrength;		// Reference to UI Slider
+	public Button Next;					// Reference to UI Button
+	public Text info;					// Reference to UI Text
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 

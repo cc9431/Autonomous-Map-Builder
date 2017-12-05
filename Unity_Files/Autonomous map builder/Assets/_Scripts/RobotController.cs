@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class RobotController : MonoBehaviour {
-	private Node[,] robotGrid;
-	private Grid worldGrid;
-	private Vector2 offsetX;
-	public static float radarStrength;
-	public static bool canRun;
+	private Node[,] robotGrid;			// Grid based on robot's knowledge
+	private Grid worldGrid;				// Reference to the real grid
+	private Vector2 offsetX;			// Offset for displaying robot's grid
+	public static float radarStrength;	// Strength of robot's visual field
+	public static bool canRun;			// Can robot perform search?
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
@@ -58,7 +58,7 @@ public class RobotController : MonoBehaviour {
 					} else Gizmos.color = Color.black;
 				} else Gizmos.color = Color.gray;
 				
-				Gizmos.DrawCube(n.position + offsetX, Vector3.one * worldGrid.nodeDiameter);
+				Gizmos.DrawCube(n.position + offsetX, Vector3.one * (worldGrid.nodeDiameter - 0.05f));
 			}
 		}
 	}
