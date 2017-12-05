@@ -16,17 +16,20 @@ public class Grid : MonoBehaviour {
 	public static Grid instance;
 	public int state = 0;
 	public float nodeDiameter;
-	public LayerMask walls;
+	public LayerMask wallsLayer;
+	public LayerMask notWallsLayer;
 	public Vector2 gridSize;
 	public GameObject wallPreFab;
 	public GameObject robotPreFab;
 	public GameObject emptyPreFab;
-	public Transform Walls;
+	public Transform WallsParent;
 	public Slider Ysize;
 	public Slider Xsize;
 	public Slider radarStrength;
 	public Button Next;
 	public Text info;
+
+	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
 	private void Awake(){
 		if (instance == null){
@@ -50,19 +53,17 @@ public class Grid : MonoBehaviour {
 		if (Input.GetButton("Fire1")) {
 			mouse = (Camera.main.ScreenToWorldPoint(Input.mousePosition));
 			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-			if (Physics.Raycast(ray)){
+			if (Physics.Raycast(ray, 50, notWallsLayer)){
 				Node mouseNode = nodeFromWorldPoint(mouse);
-				if (mouseNode.notWall){
-					if (canDropWall){
-						GameObject newWall = (GameObject) Instantiate(wallPreFab, mouseNode.position, Quaternion.identity);
-						newWall.transform.SetParent(Walls);
-						mouseNode.notWall = false;
-					} else if (canDropRobot) {
-						Instantiate(robotPreFab, mouseNode.position, Quaternion.identity);
-						RobotController.radarStrength = radarStrength.value;
-						canDropRobot = false;
-						Next.interactable = true;
-					}
+				if (canDropWall){
+					GameObject newWall = (GameObject) Instantiate(wallPreFab, mouseNode.position, Quaternion.identity);
+					newWall.transform.SetParent(WallsParent);
+					mouseNode.notWall = false;
+				} else if (canDropRobot) {
+					Instantiate(robotPreFab, mouseNode.position, Quaternion.identity);
+					RobotController.radarStrength = radarStrength.value;
+					canDropRobot = false;
+					Next.interactable = true;
 				}
 			}
         }
@@ -77,10 +78,20 @@ public class Grid : MonoBehaviour {
 			Camera.main.orthographicSize = Mathf.MoveTowards(Camera.main.orthographicSize, camSize, 0.25f);
 	}
 
-	public static Grid get(){
-		return instance;
+	private void OnDrawGizmos() {
+		if (grid != null && drawWait == 0 && state < 2){
+			Node rb = nodeFromWorldPoint(mouse);
+			foreach(Node n in grid){
+				Color col = (n.notWall)?Color.white:Color.black;
+				if (n == rb) col = Color.cyan;
+				col.a = 0.2f;
+				Gizmos.color = col;
+				Gizmos.DrawWireCube(n.position, Vector3.one * (nodeDiameter - 0.1f));
+			}
+		}
 	}
 	
+	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= UI controllers -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 	public void setX(Slider s){
 		drawWait = 10;
 		gridSize.x = s.value * 2;
@@ -134,8 +145,15 @@ public class Grid : MonoBehaviour {
 			Next.gameObject.SetActive(false);
 			if (gridSize.x >= gridSize.y) camSize *= 2;
 			camPos = gridSize.x / 2 + 1;
+			RobotController.canRun = true;
 			//::Run simulation
 		}
+	}
+
+	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Grid controllers =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
+
+	public static Grid get(){
+		return instance;
 	}
 
 	private void resetSize(){
@@ -144,17 +162,6 @@ public class Grid : MonoBehaviour {
 		scale.y = gridSize.y;
 		transform.localScale = scale;
 		GenerateGrid();
-	}
-
-	private void calculateCameraSize(){
-		float size = camSize;
-		int extra = canDropWall?1:6;
-		if ((gridSize.y / Screen.height) > (gridSize.x / Screen.width)){
-			size = gridSize.y / 2;
-		} else {
-			size = (gridSize.x * Screen.height / Screen.width) / 2;
-		}
-		camSize = size + extra;
 	}
 
 	public void GenerateGrid(){
@@ -166,11 +173,12 @@ public class Grid : MonoBehaviour {
 		for (int x = 0; x < gx; x++){
 			for (int y = 0; y < gy; y++){
 				Vector2 worldPoint = bottomLeft + Vector2.right * (x * nodeDiameter + nodeRadius) + Vector2.up * (y * nodeDiameter + nodeRadius);
-				bool walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, walls));
-				grid[x,y] = new Node(false, walkable, worldPoint);
+				bool walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, wallsLayer));
+				int[] gridPos = {x,y};
+				grid[x,y] = new Node(false, walkable, worldPoint, gridPos);
 				if (canDropRobot && walkable) {
 					GameObject empty = (GameObject) Instantiate(emptyPreFab, worldPoint, Quaternion.identity);
-					empty.transform.SetParent(Walls);
+					empty.transform.SetParent(WallsParent);
 				}
 			}
 		}
@@ -183,85 +191,16 @@ public class Grid : MonoBehaviour {
 		return grid[Mathf.RoundToInt((gridSize.x - 1) * percentX), Mathf.RoundToInt((gridSize.y - 1) * percentY)];
 	}
 
-	private void OnDrawGizmos() {
-		if (grid != null && drawWait == 0 && state < 2){
-			Node rb = nodeFromWorldPoint(mouse);
-			foreach(Node n in grid){
-				Color col = (n.notWall)?Color.white:Color.black;
-				if (n == rb) col = Color.cyan;
-				col.a = 0.2f;
-				Gizmos.color = col;
-				Gizmos.DrawWireCube(n.position, Vector3.one * (nodeDiameter - 0.1f));
-			}
+	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Misc =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
+
+	private void calculateCameraSize(){
+		float size = camSize;
+		int extra = canDropWall?1:6;
+		if ((gridSize.y / Screen.height) > (gridSize.x / Screen.width)){
+			size = gridSize.y / 2;
+		} else {
+			size = (gridSize.x * Screen.height / Screen.width) / 2;
 		}
+		camSize = size + extra;
 	}
 }
-/*
-rivate Grid grid;
-	private bool move = false, canStart = true;
-
-	void Awake()
-	{
-		grid = GetComponent<Grid> ();
-	}
-
-	void Start()
-	{
-		cachedSeekerPos = seeker.position;
-		cachedTargetPos = target.position;
-		FindPath (seeker.position, target.position);
-	}
-
-	void Update()
-	{
-		if(Input.GetKeyDown(KeyCode.Space))
-			move = true;
-
-		if (!move && canStart) {
-			if (cachedSeekerPos != seeker.position) {
-				cachedSeekerPos = seeker.position;
-				FindPath (seeker.position, target.position);
-			}
-			if (cachedTargetPos != target.position) {
-				cachedTargetPos = target.position;
-				FindPath (seeker.position, target.position);
-			}
-		} else 
-		{
-			AnimatePath();
-		}
-	}
-	
-	void AnimatePath()
-	{
-		move = false;
-		canStart = false;
-		Vector3 currentPos = seeker.position;
-		if (grid.Path != null) 
-		{
-			//Debug.Log("ANIMATING PATH");
-			StartCoroutine(UpdatePosition(currentPos, grid.Path[0], 0));
-		}
-	}
-
-	IEnumerator UpdatePosition(Vector3 currentPos, Node n, int index) 
-	{
-		//Debug.Log ("Started Coroutine...");
-		float t = 0.0f;
-		Vector3 correctedPathPos = new Vector3 (n.GetWorldPos().x, 1, n.GetWorldPos().z);
-		while (t < 1.0f) {
-			t += Time.deltaTime;
-			seeker.position = Vector3.Lerp(currentPos, correctedPathPos, t);
-			yield return null;
-		}
-		//Debug.Log ("Finished updating...");
-		seeker.position = correctedPathPos;
-		currentPos = correctedPathPos;
-
-		index++;
-		if (index < grid.Path.Count)
-			StartCoroutine(UpdatePosition(currentPos, grid.Path[index], index));
-		else
-			canStart = true;
-	}
-*/
