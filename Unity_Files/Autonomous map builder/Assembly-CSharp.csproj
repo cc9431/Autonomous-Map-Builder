@@ -47,6 +47,7 @@
   </ItemGroup>
   <ItemGroup>
      <Compile Include="Assets\_Scripts\Grid.cs" />
+     <Compile Include="Assets\_Scripts\MinHeap.cs" />
      <Compile Include="Assets\_Scripts\Node.cs" />
      <Compile Include="Assets\_Scripts\RobotController.cs" />
  <Reference Include="UnityEngine.UI">

@@ -55,11 +55,11 @@ public class Grid : MonoBehaviour {
 			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 			if (Physics.Raycast(ray, 50, notWallsLayer)){
 				Node mouseNode = nodeFromWorldPoint(mouse);
-				if (canDropWall){
+				if (canDropWall && mouseNode.notWall){
 					GameObject newWall = (GameObject) Instantiate(wallPreFab, mouseNode.position, Quaternion.identity);
 					newWall.transform.SetParent(WallsParent);
 					mouseNode.notWall = false;
-				} else if (canDropRobot) {
+				} else if (canDropRobot && mouseNode.notWall) {
 					Instantiate(robotPreFab, mouseNode.position, Quaternion.identity);
 					RobotController.radarStrength = radarStrength.value;
 					canDropRobot = false;

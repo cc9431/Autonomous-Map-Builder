@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class RobotController : MonoBehaviour {
@@ -8,6 +9,8 @@ public class RobotController : MonoBehaviour {
 	private Vector2 offsetX;			// Offset for displaying robot's grid
 	public static float radarStrength;	// Strength of robot's visual field
 	public static bool canRun;			// Can robot perform search?
+	public GameObject debug;
+	public GameObject t;
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
@@ -18,30 +21,29 @@ public class RobotController : MonoBehaviour {
 		int gy = (int) worldGrid.gridSize.y;
 		robotGrid = new Node[gx, gy];
 
-		offsetX = new Vector2(gx/2 + 1, 0);
+		offsetX = new Vector2(gx + worldGrid.nodeDiameter, 0);
 
-		Vector2 bottomLeft = new Vector2(worldGrid.gameObject.transform.position.x,worldGrid.gameObject.transform.position.y);
+		Vector2 bottomLeft = new Vector2(worldGrid.gameObject.transform.position.x, worldGrid.gameObject.transform.position.y);
 		bottomLeft -= (Vector2.right * gx/2 + Vector2.up * gy/2);
 		bottomLeft += offsetX;
 
 		// Initialize Grid based on current knowledge: grid size and current position
-		for (int x = 0; x < gx; x++){
-			for (int y = 0; y < gy; y++){
+		for (int x = 0; x <= gx; x++){
+			for (int y = 0; y <= gy; y++){
 				Vector2 gridPoint = bottomLeft + Vector2.right * (x * worldGrid.nodeDiameter + worldGrid.nodeRadius) + Vector2.up * (y * worldGrid.nodeDiameter + worldGrid.nodeRadius);
 				int[] gridPos = {x, y};
 				robotGrid[x, y] = new Node(true, false, gridPoint, gridPos);
 			}
 		}
-
-		// TEST
-		StartCoroutine(ScanRotation());
 	}
 
 	void Update(){
+		// Check current Node
+		// If node is frontier, rotate and scan
+		// Else goto next frontier node
 		if(canRun){
-			// Check current Node
-			// If node is frontier, rotate and scan
-			// Else goto next frontier node
+			Rotation();
+			canRun = false;
 		}
 	}
 	
@@ -58,12 +60,39 @@ public class RobotController : MonoBehaviour {
 					} else Gizmos.color = Color.black;
 				} else Gizmos.color = Color.gray;
 				
-				Gizmos.DrawCube(n.position + offsetX, Vector3.one * (worldGrid.nodeDiameter - 0.05f));
+				Gizmos.DrawCube(n.position, Vector3.one * (worldGrid.nodeDiameter - 0.05f));
 			}
 		}
 	}
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Mapping functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
+
+	void Rotation(){
+        float startRotation = transform.eulerAngles.z;
+        float endRotation = startRotation + 360.0f;
+		float duration = 20f;
+        float t = 0.0f;
+        while (t < duration){
+            t += Time.deltaTime;
+            float zRotation = Mathf.Lerp(startRotation, endRotation, t / duration) % 360.0f;
+            transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, zRotation);
+			ScanAndUpdate();
+        }
+		List<Vector2> next = CreateFrontier();
+		if(next.Count == 0){
+			canRun = false;
+			Debug.Log("FINISHED BITCH");
+			return;
+		}
+		List<Vector2> path = AStarPath(next);
+		if (path != null){
+			foreach(Vector2 pos in path){
+				transform.position = pos - offsetX;
+			}
+		}
+
+
+    }
 
 	private void ScanAndUpdate(){
 		// Scan surroundings (get info from Grid.cs)
@@ -71,50 +100,117 @@ public class RobotController : MonoBehaviour {
 		// Find frontier
 		Ray ray = new Ray(transform.position, transform.up);
 		RaycastHit[] hits = Physics.RaycastAll(ray, radarStrength);
+		hits = hits.OrderBy(hit=>hit.distance).ToArray();
 		foreach(RaycastHit hit in hits){
 			Node worldNode = worldGrid.nodeFromWorldPoint(hit.point);
 			Node robotNode = robotNodeFromWorldPoint(hit.point);
 			robotNode.unknown = false;
 			robotNode.notWall = worldNode.notWall;
+			if (!robotNode.notWall) break;
 		}
 	}
 
-	private bool CheckFrontier(int[] nodePos){
-		int x = nodePos[0];
-		int y = nodePos[1];
-		int gridX = (int) worldGrid.gridSize.x;
-		int gridY = (int) worldGrid.gridSize.y;
-		
-		bool up = false;
-		bool down = false;
-		bool right = false;
-		bool left = false;
-		
-		if (y + 1 < gridY) up = robotGrid[x, y + 1].unknown;
-		if (y - 1 >= 0) 	down = robotGrid[x, y - 1].unknown;
-		if (x + 1 < gridX) right = robotGrid[x + 1, y].unknown;
-		if (x - 1 >= 0) 	left = robotGrid[x - 1, y].unknown;
-		
-		return (up || down || right || left);
+	private List<Vector2> CreateFrontier(){
+		List<Vector2> closestNodes = new List<Vector2>();
+		foreach(Node node in robotGrid){
+			if(!node.unknown && node.notWall){
+				int x = node.gridPosition[0];
+				int y = node.gridPosition[1];
+				int gridX = (int) worldGrid.gridSize.x;
+				int gridY = (int) worldGrid.gridSize.y;
+				
+				bool up = false;
+				bool down = false;
+				bool right = false;
+				bool left = false;
+				
+				if (y + 1 < gridY) up = robotGrid[x, y + 1].unknown;
+				if (y - 1 >= 0) 	down = robotGrid[x, y - 1].unknown;
+				if (x + 1 < gridX) right = robotGrid[x + 1, y].unknown;
+				if (x - 1 >= 0) 	left = robotGrid[x - 1, y].unknown;
+
+				node.isFrontier = (up || down || right || left);
+				if (node.isFrontier) closestNodes.Add(node.position);
+			}
+		}
+		Vector3 robotGridPos = new Vector3(offsetX.x, offsetX.y, 1f);
+		closestNodes = closestNodes.OrderBy(x=>Vector2.Distance(x,transform.position + robotGridPos)).ToList();
+		Debug.Log("Frontier:" + closestNodes[0]);
+		return closestNodes;
 	}
 
-	IEnumerator ScanRotation(){
-        float startRotation = transform.eulerAngles.z;
-        float endRotation = startRotation + 360.0f;
-		float duration = 3f;
-        float t = 0.0f;
-        while (t  < duration){
-            t += Time.deltaTime;
-            float zRotation = Mathf.Lerp(startRotation, endRotation, t / duration) % 360.0f;
-            transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, zRotation);
-			ScanAndUpdate();
-            yield return null;
-        }
-    }
+	private List<Vector2> AStarPath(List<Vector2> frontiers){
+		List<Vector2> path = new List<Vector2>();
+		MinHeap<Node> heap = new MinHeap<Node>();
+		HashSet<Node> closed = new HashSet<Node>();
+		Dictionary<Node,Node> cameFrom = new Dictionary<Node, Node>();
 
-	private void Goto(Node pos){
-		// Go to pos
-		// Scan()
+		Vector2 next = frontiers[0];
+		Node target = robotNodeFromWorldPoint(next - offsetX);
+		heap.Add(robotNodeFromWorldPoint(transform.position));
+		bool found = false;
+
+		while(heap.Count > 0){
+			Node current = heap.RemoveMin();
+			if(!closed.Contains(current)) {
+				closed.Add(current);
+				if(current.gridPosition == target.gridPosition) {
+					path = createPath(cameFrom, current);
+					found = true;
+					break;
+				}
+
+				foreach(Node n in GridNeighbors(current)){
+					if(!closed.Contains(n) && !cameFrom.ContainsKey(n)){
+						n.fCost = Vector2.Distance(n.position, target.position) + worldGrid.nodeDiameter;
+						heap.Add(n);
+						cameFrom.Add(n, current);
+					}
+				}
+			}
+		}
+
+		if (found) return path;
+		else if (frontiers.Count > 1) return AStarPath(frontiers.GetRange(1,frontiers.Count - 1));
+		else{
+			Debug.Log("PROBLEM");
+			return null;
+		}
+	}
+
+	private List<Vector2> createPath(Dictionary<Node,Node> cameFrom, Node current){
+		List<Vector2> path = new List<Vector2>();
+		path.Add(current.position);
+		while(cameFrom.ContainsKey(current)){
+			current = cameFrom[current];
+			path.Insert(0, current.position);
+		}
+
+		return path;
+	}
+
+	private List<Node> GridNeighbors(Node node){
+		List<Node> neighbors = new List<Node>();
+		int x = node.gridPosition[0];
+		int y = node.gridPosition[1];
+		int gridX = (int) worldGrid.gridSize.x;
+		int gridY = (int) worldGrid.gridSize.y;
+
+		if (y + 1 < gridY){
+			Node up = robotGrid[x, y + 1];
+			if (up.notWall && !up.unknown) neighbors.Add(up);
+		} if (y - 1 >= 0){
+			Node down = robotGrid[x, y - 1];
+			if (down.notWall && !down.unknown) neighbors.Add(down);
+		} if (x + 1 < gridX){
+			Node right = robotGrid[x + 1, y];
+			if (right.notWall && !right.unknown) neighbors.Add(right);
+		} if (x - 1 >= 0){
+			Node left = robotGrid[x - 1, y];
+			if (left.notWall && !left.unknown) neighbors.Add(left);
+		}
+
+		return neighbors;
 	}
 
 	private Node robotNodeFromWorldPoint(Vector2 worldPos){
