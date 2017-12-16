@@ -12,8 +12,8 @@ Example of robot mapping an unknown world with known localization:
 Example of robot localizing in a known world:
 
 After one step:
-<img src="/Documents/1StepLocal"/>
+<img src="/Documents/1StepLocal.png"/>
 After three steps:
-<img src="/Documents/3StepLocal"/>
+<img src="/Documents/3StepLocal.png"/>
 After five steps:
-<img src="/Documents/5StepLocal"/>
+<img src="/Documents/5StepLocal.png"/>
