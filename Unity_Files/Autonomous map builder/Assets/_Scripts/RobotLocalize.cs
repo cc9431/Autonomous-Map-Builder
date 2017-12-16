@@ -5,56 +5,66 @@ using UnityEngine;
 using UnityEngine.UI;
 
 public class RobotLocalize : MonoBehaviour {
-	private Node[] particles;			// Grid based on robot's knowledge
-	private Grid worldGrid;				// Reference to the real grid
-	private Vector2 offsetX;			// Offset for displaying robot's grid
-	public float radarStrength;			// Strength of robot's visual field
-	private int gy;						// Y size of grid
-	private int gx;						// X size of grid
+	private Particle[] particles;			// Grid based on robot's knowledge
+	private Grid worldGrid;					// Reference to the real grid
+	private List<GameObject> Visualization;	// 
+	public GameObject particlePrefab;		//
+	private GameObject particleParent;		//
+	public float radarStrength;				// Strength of robot's visual field
+	private int gy;							// Y size of grid
+	private int gx;							// X size of grid
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
 	void Start(){
+		particleParent = GameObject.Find("Particles");
 		worldGrid = Grid.get();
 		gx = (int) worldGrid.gridSize.x;
 		gy = (int) worldGrid.gridSize.y;
-		particles = new Node[gx * gy];
-
-		offsetX = new Vector2(gx + worldGrid.nodeDiameter, 0);
+		particles = new Particle[gx * gy];
+		Visualization = new List<GameObject>();
 
 		// Initialize Grid based on current knowledge: grid size and current position
 		for (int y = 0; y < gy; y++){
 			for (int x = 0; x < gx; x++){
 				int index = (y * gx) + x;
-				particles[index] = new Node (worldGrid.grid[x, y]);
+				particles[index] = new Particle(worldGrid.grid[x, y]);
+				Visualization.Add((GameObject) Instantiate(particlePrefab, particles[index].position, Quaternion.identity));
+				Visualization[index].transform.SetParent(particleParent.transform);
 			}
 		}
+
+		Visualize();
 	}
-	
-	private void OnDrawGizmos() {
-		// Draw grid based on current knowledge
-		if (worldGrid.state == 3){
-			Dictionary<int, int> ratios = new Dictionary<int, int>();
-			Dictionary<int, Vector2> positions = new Dictionary<int, Vector2>();
-			foreach(Node p in particles){
-				int[] pos = worldGrid.nodeFromWorldPoint(p.position).gridPosition;
-				int index = pos[1] * gx + pos[0];
 
-				if (ratios.ContainsKey(index))
-					ratios[index]++;
-				else{
-					ratios[index] = 1;
-					positions[index] = p.position;
-				}
+	private void Visualize(){
+		foreach(Transform child in particleParent.transform)
+			Destroy(child.gameObject);
+
+		Dictionary<int, int> ratios = new Dictionary<int, int>();
+		Dictionary<int, Vector2> positions = new Dictionary<int, Vector2>();
+		foreach(Particle p in particles){
+			int[] pos = worldGrid.nodeFromWorldPoint(p.position).gridPosition;
+			int index = pos[1] * gx + pos[0];
+
+			if (ratios.ContainsKey(index))
+				ratios[index]++;
+			else{
+				ratios[index] = 1;
+				positions[index] = p.position;
 			}
+		}
 
-			Gizmos.color = Color.cyan;
-
-			foreach(int k in ratios.Keys){
-				float size = ratios[k]/(float)particles.Length;
-				if (size == 1) worldGrid.finished();
-				Gizmos.DrawSphere(positions[k],size/2);
-			}
+		int count = 0;
+		foreach(int k in ratios.Keys){
+			float size = ratios[k]/(float)particles.Length;
+			if (size == 1) worldGrid.finished();
+			Vector3 newPos = new Vector3(positions[k].x, positions[k].y, -4f);
+			GameObject current = (GameObject) Instantiate(particlePrefab, newPos, Quaternion.identity);
+			current.transform.localScale = new Vector3(size, size, 0.1f);
+			current.transform.SetParent(particleParent.transform);
+			Visualization[count] = current;
+			count++;
 		}
 	}
 
@@ -70,6 +80,7 @@ public class RobotLocalize : MonoBehaviour {
 		OdomentryProb(step);
 		SensorProb();
 		Resample();
+		Visualize();
 		yield return new WaitForSeconds(1);
 		StartCoroutine(TakeStep());
 	}
@@ -90,14 +101,14 @@ public class RobotLocalize : MonoBehaviour {
 	}
 
 	private void OdomentryProb(Vector2 dir){
-		foreach(Node p in particles){
+		foreach(Particle p in particles){
 			// Apply movement
 			// Check bounds
 			// Check wall
 			Node oldPos = worldGrid.nodeFromWorldPoint(p.position);
 			int x = (int) dir.x + oldPos.gridPosition[0];
 			int y = (int) dir.y + oldPos.gridPosition[1];
-			Vector2 newPos = p.position + dir;
+			Vector3 newPos = p.position + dir;
 			p.position = newPos;
 
 			if (LegalStep(x, y)) p.prob = 0.9f;
@@ -111,7 +122,7 @@ public class RobotLocalize : MonoBehaviour {
 		if (Physics.Raycast(transform.position, transform.up, out robotHit))
 			dist = robotHit.distance;
 
-		foreach(Node p in particles){
+		foreach(Particle p in particles){
 			RaycastHit pHit;
 			float pDist = 0;
 			if (Physics.Raycast(p.position, transform.up, out pHit))
@@ -127,17 +138,17 @@ public class RobotLocalize : MonoBehaviour {
 	}
 
 	private void Resample(){
-		Node[] resample = new Node[particles.Length];
+		Particle[] resample = new Particle[particles.Length];
 		for(int i = 0; i < resample.Length; i++){
 			float rand = Random.Range(0f, 1f);
-			List<Node> options = new List<Node>();
+			List<Particle> options = new List<Particle>();
 			for (int j = 0; j < particles.Length; j++){
 				if (particles[j].prob > rand) options.Add(particles[j]);
 			}
 			if (options.Count > 0)
-				resample[i] = new Node(options[Random.Range(0, options.Count)]);
+				resample[i] = new Particle(options[Random.Range(0, options.Count)]);
 			else
-				resample[i] = new Node(particles[Random.Range(0, particles.Length)]);
+				resample[i] = new Particle(particles[Random.Range(0, particles.Length)]);
 		}
 
 		particles = resample;

@@ -10,6 +10,7 @@ public class RobotController : MonoBehaviour {
 	private Vector2 offsetX;			// Offset for displaying robot's grid
 	private Vector2 lastFrontier;		// Store the most recent frontier to not get stuck
 	public float radarStrength;			// Strength of robot's visual field
+	public GameObject nodePrefab;		// For visualizing Nodes
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
@@ -28,17 +29,20 @@ public class RobotController : MonoBehaviour {
 		// Initialize Grid based on current knowledge: grid size and current position
 		for (int x = 0; x < gx; x++){
 			for (int y = 0; y < gy; y++){
-				Vector2 gridPoint = bottomLeft + Vector2.right * (x * worldGrid.nodeDiameter + worldGrid.nodeRadius) + Vector2.up * (y * worldGrid.nodeDiameter + worldGrid.nodeRadius);
+				Vector2 worldPoint = bottomLeft + Vector2.right * (x * worldGrid.nodeDiameter + worldGrid.nodeRadius) + Vector2.up * (y * worldGrid.nodeDiameter + worldGrid.nodeRadius);
 				int[] gridPos = {x, y};
-				robotGrid[x, y] = new Node(true, true, gridPoint, gridPos);
+				robotGrid[x, y] = new Node(true, true, worldPoint, gridPos);
+				GameObject current = (GameObject) Instantiate(nodePrefab, worldPoint, Quaternion.identity);
+				robotGrid[x, y].myObject = current;
 			}
 		}
 
 		int[] robotPos = worldGrid.nodeFromWorldPoint(transform.position).gridPosition;
 		robotGrid[robotPos[0], robotPos[1]].unknown = false;
+		robotNodeFromWorldPoint(transform.position).MakeRobot();
 	}
 	
-	private void OnDrawGizmos() {
+	/*private void OnDrawGizmos() {
 		// Draw grid based on current knowledge
 		Node curNode = robotNodeFromWorldPoint(transform.position);
 		if (worldGrid.state == 3){
@@ -54,7 +58,7 @@ public class RobotController : MonoBehaviour {
 				Gizmos.DrawCube(n.position, Vector3.one * (worldGrid.nodeDiameter - 0.05f));
 			}
 		}
-	}
+	}*/
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Mapping functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
@@ -84,10 +88,11 @@ public class RobotController : MonoBehaviour {
 		foreach(RaycastHit hit in hits){
 			Node worldNode = worldGrid.nodeFromWorldPoint(hit.point);
 			Node robotNode = robotNodeFromWorldPoint(hit.point);
-			robotNode.unknown = false;
-			robotNode.notWall = worldNode.notWall;
+			if (worldNode.notWall) robotNode.MakeEmpty();
+			else robotNode.MakeWall();
 			if (!robotNode.notWall) break;
 		}
+		robotNodeFromWorldPoint(transform.position).MakeRobot();
 	}
 
 	private IEnumerator AfterScan(){
@@ -101,7 +106,9 @@ public class RobotController : MonoBehaviour {
 			List<Vector2> path = AStarPath(next);
 			if (path != null){
 				foreach(Vector2 pos in path){
+					robotNodeFromWorldPoint(transform.position).MakeEmpty();
 					transform.position = pos - offsetX;
+					robotNodeFromWorldPoint(transform.position).MakeRobot();
 					yield return new WaitForSeconds(0.1f);
 				}
 			}
@@ -128,7 +135,9 @@ public class RobotController : MonoBehaviour {
 				if (x + 1 < gridX) right = robotGrid[x + 1, y].unknown;
 				if (x - 1 >= 0) 	left = robotGrid[x - 1, y].unknown;
 
-				node.isFrontier = (up || down || right || left);
+				if (up || down || right || left) node.MakeFrontier();
+				else node.MakeEmpty();
+
 				if (node.isFrontier) closestNodes.Add(node.position);
 			}
 		}
