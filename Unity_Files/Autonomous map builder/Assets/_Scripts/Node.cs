@@ -8,10 +8,10 @@ public class Node : IComparable<Node> {
 	public bool notWall;		// Walkable
 	public Vector2 position;	// Position in world space
 	public bool isFrontier;		// Edge node in graph
-	public bool isCharger;		// Option for adding charging stations for robot
 	public int[] gridPosition;	// Position in the Node's Grid (i.e. [x, y])
-	public float fCost;
-	public float gCost;
+	public float fCost; 		// f-cost for A*
+	public float gCost; 		// g-cost for G*
+	public float prob; 			// probability that robot is on node, for localization
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Constructor -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 	public Node(bool not_known, bool not_wall, Vector2 pos, int[] gridPos){
@@ -22,8 +22,12 @@ public class Node : IComparable<Node> {
 
 		fCost = 1000;
 		gCost = 1000;
+		prob = 0;
 		isFrontier = false;
-		isCharger = false;
+	}
+	public Node(Node other){
+		position = other.position;
+		prob = other.prob;
 	}
 
 	public int CompareTo(Node otherNode){

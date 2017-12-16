@@ -3,16 +3,19 @@ using System.Collections.Generic;
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class Grid : MonoBehaviour {
 	public float nodeRadius = 0.5f;		// Half-size of node
-	private Node[,] grid;				// Real-world grid of nodes
+	public Node[,] grid;				// Real-world grid of nodes
 	private int drawWait = 10;			// Time that OnDrawGizmos must wait before re-drawing grid
 	private Vector3 mouse;				// Position of last mouse click
 	private bool canDropWall;			// Can the user put down walls?
 	private bool canDropRobot;			// Can the user place the robot?
 	private float camSize;				// Half-size that camera must move towards
 	private float camPos;				// Position that camera must move towards
+	private RobotController rbcontrol;	// Reference to robot
+	private RobotLocalize rblocal;	// Reference to robot
 	public static Grid instance;		// Static instance of this Grid
 	public int state = 0;				// Current state of user interaction
 	public float nodeDiameter;			// Full-size of node
@@ -20,13 +23,16 @@ public class Grid : MonoBehaviour {
 	public LayerMask notWallsLayer;		// LayerMask for empty Nodes
 	public Vector2 gridSize;			// 2D size of grid
 	public GameObject wallPreFab;		// Copy of wall gameobject
-	public GameObject robotPreFab;		// Copy of robot gameobject
+	public GameObject robotMapPreFab;	// Copy of robot map gameobject
+	public GameObject robotLocalizePreFab; // Copy of robot localize gameobject
 	public GameObject emptyPreFab;		// Copy of empty node gameobject (invisible box collider)
 	public Transform WallsParent;		// GameObject used for organizing wall and empty gameobjects
 	public Slider Ysize;				// Reference to UI Slider
 	public Slider Xsize;				// Reference to UI Slider
+	public Slider runType;				// Reference to UI Slider
 	public Slider radarStrength;		// Reference to UI Slider
 	public Button Next;					// Reference to UI Button
+	public Button Restart;				// Reference to UI Button
 	public Text info;					// Reference to UI Text
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
@@ -43,6 +49,8 @@ public class Grid : MonoBehaviour {
 		
 		nodeDiameter = nodeRadius * 2;
 		gridSize = new Vector2(10f, 10f);
+
+		Restart.gameObject.SetActive(false);
 		
 		GenerateGrid();
 		controlState();
@@ -58,12 +66,37 @@ public class Grid : MonoBehaviour {
 				if (canDropWall && mouseNode.notWall){
 					GameObject newWall = (GameObject) Instantiate(wallPreFab, mouseNode.position, Quaternion.identity);
 					newWall.transform.SetParent(WallsParent);
+					String n = mouseNode.gridPosition[0].ToString();
+					n += mouseNode.gridPosition[1].ToString();
+					newWall.name = n;
 					mouseNode.notWall = false;
 				} else if (canDropRobot && mouseNode.notWall) {
-					Instantiate(robotPreFab, mouseNode.position, Quaternion.identity);
-					RobotController.radarStrength = radarStrength.value;
+					GameObject rb;
+					if (runType.value == 1){
+						rb = (GameObject) Instantiate(robotLocalizePreFab, mouseNode.position, Quaternion.identity);
+						rblocal = rb.GetComponent<RobotLocalize>();
+						rblocal.radarStrength = radarStrength.value;
+					} else {
+						rb = (GameObject) Instantiate(robotMapPreFab, mouseNode.position, Quaternion.identity);
+						rbcontrol = rb.GetComponent<RobotController>();
+						rbcontrol.radarStrength = radarStrength.value;
+					}
 					canDropRobot = false;
 					Next.interactable = true;
+				}
+			}
+        }
+
+		if (Input.GetButton("Fire2")) {
+			mouse = (Camera.main.ScreenToWorldPoint(Input.mousePosition));
+			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+			if (Physics.Raycast(ray, 50, wallsLayer)){
+				Node mouseNode = nodeFromWorldPoint(mouse);
+				if (canDropWall && !mouseNode.notWall){
+					String n = mouseNode.gridPosition[0].ToString();
+					n += mouseNode.gridPosition[1].ToString();
+					Destroy(GameObject.Find(n));
+					mouseNode.notWall = true;
 				}
 			}
         }
@@ -116,24 +149,29 @@ public class Grid : MonoBehaviour {
 		controlState();
 	}
 
+	public void finished(){
+		Restart.gameObject.SetActive(true);
+	}
+
 	private void controlState(){
 		if (state == 0){
 			info.text = "Choose Map Dimensions";
 			Xsize.gameObject.SetActive(true);
 			Ysize.gameObject.SetActive(true);
+			runType.gameObject.SetActive(true);
 			canDropWall = false;
 			canDropRobot = false;
 			Next.interactable = true;
 		} else if (state == 1){
-			info.text = "Draw Walls";
+			info.text = "Draw Walls\n\nLeft Click to Create Walls\nRight Click to Destroy Walls";
 			Xsize.gameObject.SetActive(false);
 			Ysize.gameObject.SetActive(false);
+			runType.gameObject.SetActive(false);
 			canDropWall = true;
 			Next.interactable = true;
 			Next.GetComponentInChildren<Text>().text = "Next";
 			calculateCameraSize();
 		} else if (state == 2){
-			//: Add options for localization here
 			info.text = "Place Robot";
 			canDropWall = false;
 			canDropRobot = true;
@@ -143,11 +181,18 @@ public class Grid : MonoBehaviour {
 		} else if (state == 3){
 			info.text = "";
 			Next.gameObject.SetActive(false);
-			if (gridSize.x >= gridSize.y) camSize *= 2;
-			camPos = gridSize.x / 2 + 1;
-			RobotController.canRun = true;
-			//::Run simulation
+			if (runType.value == 0) {
+				if (gridSize.x >= gridSize.y) camSize *= 2;
+				camPos = gridSize.x / 2 + 1;
+				StartCoroutine(rbcontrol.Rotation());
+			} else {
+				StartCoroutine(rblocal.TakeStep());
+			}
 		}
+	}
+
+	public void restart(){
+		SceneManager.LoadScene("Main_Scene");
 	}
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Grid controllers =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
@@ -176,7 +221,7 @@ public class Grid : MonoBehaviour {
 				bool walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, wallsLayer));
 				int[] gridPos = {x,y};
 				grid[x,y] = new Node(false, walkable, worldPoint, gridPos);
-				if (canDropRobot && walkable) {
+				if (canDropRobot && walkable && runType.value == 0) {
 					GameObject empty = (GameObject) Instantiate(emptyPreFab, worldPoint, Quaternion.identity);
 					empty.transform.SetParent(WallsParent);
 				}
