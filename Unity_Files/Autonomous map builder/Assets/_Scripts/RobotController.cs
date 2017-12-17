@@ -86,10 +86,13 @@ public class RobotController : MonoBehaviour {
 		RaycastHit[] hits = Physics.RaycastAll(ray, radarStrength);
 		hits = hits.OrderBy(hit=>hit.distance).ToArray();
 		foreach(RaycastHit hit in hits){
-			Node worldNode = worldGrid.nodeFromWorldPoint(hit.point);
-			Node robotNode = robotNodeFromWorldPoint(hit.point);
+			GameObject hitObject = hit.collider.gameObject;
+			Node worldNode = worldGrid.nodeFromWorldPoint(hitObject.transform.position);
+			Node robotNode = robotNodeFromWorldPoint(hitObject.transform.position);
+			
 			if (worldNode.notWall) robotNode.MakeEmpty();
 			else robotNode.MakeWall();
+
 			if (!robotNode.notWall) break;
 		}
 		robotNodeFromWorldPoint(transform.position).MakeRobot();
