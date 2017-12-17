@@ -41,24 +41,6 @@ public class RobotController : MonoBehaviour {
 		robotGrid[robotPos[0], robotPos[1]].unknown = false;
 		robotNodeFromWorldPoint(transform.position).MakeRobot();
 	}
-	
-	/*private void OnDrawGizmos() {
-		// Draw grid based on current knowledge
-		Node curNode = robotNodeFromWorldPoint(transform.position);
-		if (worldGrid.state == 3){
-			foreach(Node n in robotGrid){
-				if (n == curNode) Gizmos.color = Color.green;
-				else if (!n.unknown){
-					if (n.notWall){
-						if (n.isFrontier) Gizmos.color = Color.yellow;
-						else Gizmos.color = Color.white;
-					} else Gizmos.color = Color.black;
-				} else Gizmos.color = Color.gray;
-				
-				Gizmos.DrawCube(n.position, Vector3.one * (worldGrid.nodeDiameter - 0.05f));
-			}
-		}
-	}*/
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Mapping functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
