@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 //Script Attached to Localization Robot
 public class RobotLocalize : MonoBehaviour {
-	private Particle[] particles;			// Grid based on robot's knowledge
+	private List<Particle> particles;		// Grid based on robot's knowledge
 	private Grid worldGrid;					// Reference to the real grid
 	public GameObject particlePrefab;		// Particle vizualization prefab
 	private List<GameObject> Visualization;	// List of instansiated particle prefabs
@@ -14,6 +14,7 @@ public class RobotLocalize : MonoBehaviour {
 	public float radarStrength;				// Strength of robot's visual field
 	private int gy;							// Y size of grid
 	private int gx;							// X size of grid
+	private int particleNum;				// Amount of total particles
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
@@ -23,23 +24,29 @@ public class RobotLocalize : MonoBehaviour {
 		worldGrid = Grid.get();
 		gx = (int) worldGrid.gridSize.x;
 		gy = (int) worldGrid.gridSize.y;
-		particles = new Particle[gx * gy];
+		particles = new List<Particle>();
 		Visualization = new List<GameObject>();
+		particleNum = gy*gx*4;
 
 		//Evenly distribute particles across grid cells
 		for (int y = 0; y < gy; y++){
 			for (int x = 0; x < gx; x++){
-				//Indexing 2-D array into 1-D
-				int index = (y * gx) + x;
-				particles[index] = new Particle(worldGrid.grid[x, y]);
-				Visualization.Add((GameObject) Instantiate(particlePrefab, particles[index].position, Quaternion.identity));
-				Visualization[index].transform.SetParent(particleParent.transform);
+				//Create particle at each grid cell for each possible heading
+				for (int i = 0; i < 4; i++){
+					Particle p = new Particle(worldGrid.grid[x, y], 90*i);
+					GameObject vis = (GameObject) Instantiate(particlePrefab, p.position, Quaternion.identity);
+
+					particles.Add(p);
+					vis.transform.SetParent(particleParent.transform);
+					Visualization.Add(vis);
+				}
 			}
 		}
 
 		Visualize();
 	}
 
+	
 	//Vizualizes the particles above grid map drawn by user
 	private void Visualize(){
 		//Removes particle visualizations from last time step
@@ -64,8 +71,11 @@ public class RobotLocalize : MonoBehaviour {
 		// per grid cell at current time step
 		int count = 0;
 		foreach(int k in ratios.Keys){
-			float size = ratios[k]/(float)particles.Length;
-			if (size == 1) worldGrid.finished();
+			float size = ratios[k]/(float)particles.Count;
+			if (size == 1){ 
+				worldGrid.finished();
+				StopAllCoroutines();
+			}
 			Vector3 newPos = new Vector3(positions[k].x, positions[k].y, -4f);
 			GameObject current = (GameObject) Instantiate(particlePrefab, newPos, Quaternion.identity);
 			current.transform.localScale = new Vector3(size, size, 0.1f);
@@ -84,14 +94,16 @@ public class RobotLocalize : MonoBehaviour {
 		Vector3 next = PickNeighbor();
 		Vector2 step = next - transform.position;
 		//Update heading of robot to point at next
+		float prevRot = transform.rotation.eulerAngles.z;
 		transform.rotation = Quaternion.Euler(CalculateHeading(step.x, step.y));
 		transform.position = next;
-		
-		OdomentryProb(step);
+		float rotate =  transform.rotation.eulerAngles.z - prevRot;
+
+		OdomentryProb(1, rotate);
 		SensorProb();
 		Resample();
 		Visualize();
-		yield return new WaitForSeconds(1);
+		yield return new WaitForSeconds(.25f);
 		StartCoroutine(TakeStep());
 	}
 
@@ -116,16 +128,21 @@ public class RobotLocalize : MonoBehaviour {
 	//Applies robot movement to all particles
 	//Computes prior probabilities according
 	// to the legality of each particle making that step
-	private void OdomentryProb(Vector2 dir){
+	private void OdomentryProb(float magnitude, float theta){
+		List<Particle> toDelete = new List<Particle>();
 		foreach(Particle p in particles){
-			Node oldPos = worldGrid.nodeFromWorldPoint(p.position);
-			int x = (int) dir.x + oldPos.gridPosition[0];
-			int y = (int) dir.y + oldPos.gridPosition[1];
-			Vector3 newPos = p.position + dir;
-			p.position = newPos;
-
-			if (LegalStep(x, y)) p.prob = 0.9f;
-			else p.prob = 0f;
+			int[] oldGridPos = worldGrid.nodeFromWorldPoint(p.position).gridPosition;
+			p.rotate(theta);
+			int[] gridDelta = p.move(magnitude);
+			if (LegalStep(oldGridPos[0] + gridDelta[0], oldGridPos[1] + gridDelta[1])) p.prob = 0.9f;
+			else{
+				p.prob = 0f;
+				toDelete.Add(p);
+			}
+		}
+		//Remove particles that go out of bounds/into a wall
+		foreach(Particle p in toDelete){
+			particles.Remove(p);
 		}
 	}
 
@@ -141,7 +158,10 @@ public class RobotLocalize : MonoBehaviour {
 		foreach(Particle p in particles){
 			RaycastHit pHit;
 			float pDist = 0;
-			if (Physics.Raycast(p.position, transform.up, out pHit))
+			Vector3 direction = new Vector3(-1 * Mathf.Sin(Mathf.Deg2Rad * p.heading), Mathf.Cos(Mathf.Deg2Rad * p.heading), 0);
+			Debug.Log("robot: "+ transform.up);
+			Debug.Log("direction: " + direction);
+			if (Physics.Raycast(p.position, direction, out pHit))
 				pDist = pHit.distance;
 			//Weight probabilities	
 			if (dist == pDist) p.prob *= 1f;
@@ -158,17 +178,17 @@ public class RobotLocalize : MonoBehaviour {
 	//Replacement occurs after selection, so the same
 	// particle may be chosen multiple times
 	private void Resample(){
-		Particle[] resample = new Particle[particles.Length];
-		for(int i = 0; i < resample.Length; i++){
+		List<Particle> resample = new List<Particle>();
+		for(int i = 0; i < particleNum; i++){
 			float rand = Random.Range(0f, 1f);
 			List<Particle> options = new List<Particle>();
-			for (int j = 0; j < particles.Length; j++){
+			for (int j = 0; j < particles.Count; j++){
 				if (particles[j].prob > rand) options.Add(particles[j]);
 			}
 			if (options.Count > 0)
-				resample[i] = new Particle(options[Random.Range(0, options.Count)]);
+				resample.Add(new Particle(options[Random.Range(0, options.Count)]));
 			else
-				resample[i] = new Particle(particles[Random.Range(0, particles.Length)]);
+				resample.Add(new Particle(particles[Random.Range(0, particles.Count)]));
 		}
 
 		particles = resample;
