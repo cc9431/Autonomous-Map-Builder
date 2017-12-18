@@ -8,13 +8,14 @@ using UnityEngine.UI;
 public class RobotLocalize : MonoBehaviour {
 	private List<Particle> particles;		// Grid based on robot's knowledge
 	private Grid worldGrid;					// Reference to the real grid
-	public GameObject particlePrefab;		// Particle vizualization prefab
 	private List<GameObject> Visualization;	// List of instansiated particle prefabs
-	private GameObject particleParent;		// Empty GameObject for Particle storage
-	public float radarStrength;				// Strength of robot's visual field
 	private int gy;							// Y size of grid
 	private int gx;							// X size of grid
 	private int particleNum;				// Amount of total particles
+	private float highestProb;				// Highest particle probability for each time step
+	private GameObject particleParent;		// Empty GameObject for Particle storage
+	public GameObject particlePrefab;		// Particle vizualization prefab
+	public float radarStrength;				// Strength of robot's visual field
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
@@ -27,6 +28,7 @@ public class RobotLocalize : MonoBehaviour {
 		particles = new List<Particle>();
 		Visualization = new List<GameObject>();
 		particleNum = gy*gx*4;
+		highestProb = 0;
 
 		//Evenly distribute particles across grid cells
 		for (int y = 0; y < gy; y++){
@@ -103,7 +105,7 @@ public class RobotLocalize : MonoBehaviour {
 		SensorProb();
 		Resample();
 		Visualize();
-		yield return new WaitForSeconds(.25f);
+		yield return new WaitForSeconds(.5f);
 		StartCoroutine(TakeStep());
 	}
 
@@ -130,19 +132,24 @@ public class RobotLocalize : MonoBehaviour {
 	// to the legality of each particle making that step
 	private void OdomentryProb(float magnitude, float theta){
 		List<Particle> toDelete = new List<Particle>();
+		List<Vector2> unique = new List<Vector2>();
 		foreach(Particle p in particles){
 			int[] oldGridPos = worldGrid.nodeFromWorldPoint(p.position).gridPosition;
 			p.rotate(theta);
 			int[] gridDelta = p.move(magnitude);
-			if (LegalStep(oldGridPos[0] + gridDelta[0], oldGridPos[1] + gridDelta[1])) p.prob = 0.9f;
-			else{
-				p.prob = 0f;
-				toDelete.Add(p);
+			if (!LegalStep(oldGridPos[0] + gridDelta[0], oldGridPos[1] + gridDelta[1])) toDelete.Add(p);
+			else {
+				if (!unique.Contains(p.position)) unique.Add(p.position);
 			}
 		}
 		//Remove particles that go out of bounds/into a wall
 		foreach(Particle p in toDelete){
 			particles.Remove(p);
+		}
+
+		//Calculate prior prob based on number of unique particle locations
+		foreach(Particle p in particles){
+			p.prob = 1 / unique.Count;
 		}
 	}
 
@@ -159,8 +166,6 @@ public class RobotLocalize : MonoBehaviour {
 			RaycastHit pHit;
 			float pDist = 0;
 			Vector3 direction = new Vector3(-1 * Mathf.Sin(Mathf.Deg2Rad * p.heading), Mathf.Cos(Mathf.Deg2Rad * p.heading), 0);
-			Debug.Log("robot: "+ transform.up);
-			Debug.Log("direction: " + direction);
 			if (Physics.Raycast(p.position, direction, out pHit))
 				pDist = pHit.distance;
 			//Weight probabilities	
@@ -169,6 +174,7 @@ public class RobotLocalize : MonoBehaviour {
 				if (dist > 0 && pDist > 0) p.prob *= 0.5f;
 				else p.prob *= 0.15f;
 			}
+			if (p.prob > highestProb) highestProb = p.prob;
 		}
 		
 	}
@@ -180,15 +186,12 @@ public class RobotLocalize : MonoBehaviour {
 	private void Resample(){
 		List<Particle> resample = new List<Particle>();
 		for(int i = 0; i < particleNum; i++){
-			float rand = Random.Range(0f, 1f);
+			float rand = Random.Range(0f, highestProb - 0.1f);
 			List<Particle> options = new List<Particle>();
 			for (int j = 0; j < particles.Count; j++){
 				if (particles[j].prob > rand) options.Add(particles[j]);
 			}
-			if (options.Count > 0)
-				resample.Add(new Particle(options[Random.Range(0, options.Count)]));
-			else
-				resample.Add(new Particle(particles[Random.Range(0, particles.Count)]));
+			resample.Add(new Particle(options[Random.Range(0, options.Count)]));
 		}
 
 		particles = resample;
