@@ -4,18 +4,20 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
+//Script Attached to Localization Robot
 public class RobotLocalize : MonoBehaviour {
 	private Particle[] particles;			// Grid based on robot's knowledge
 	private Grid worldGrid;					// Reference to the real grid
-	private List<GameObject> Visualization;	// 
-	public GameObject particlePrefab;		//
-	private GameObject particleParent;		//
+	public GameObject particlePrefab;		// Particle vizualization prefab
+	private List<GameObject> Visualization;	// List of instansiated particle prefabs
+	private GameObject particleParent;		// Empty GameObject for Particle storage
 	public float radarStrength;				// Strength of robot's visual field
 	private int gy;							// Y size of grid
 	private int gx;							// X size of grid
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
+	//Called when user creates robot
 	void Start(){
 		particleParent = GameObject.Find("Particles");
 		worldGrid = Grid.get();
@@ -24,9 +26,10 @@ public class RobotLocalize : MonoBehaviour {
 		particles = new Particle[gx * gy];
 		Visualization = new List<GameObject>();
 
-		// Initialize Grid based on current knowledge: grid size and current position
+		//Evenly distribute particles across grid cells
 		for (int y = 0; y < gy; y++){
 			for (int x = 0; x < gx; x++){
+				//Indexing 2-D array into 1-D
 				int index = (y * gx) + x;
 				particles[index] = new Particle(worldGrid.grid[x, y]);
 				Visualization.Add((GameObject) Instantiate(particlePrefab, particles[index].position, Quaternion.identity));
@@ -37,16 +40,18 @@ public class RobotLocalize : MonoBehaviour {
 		Visualize();
 	}
 
+	//Vizualizes the particles above grid map drawn by user
 	private void Visualize(){
+		//Removes particle visualizations from last time step
 		foreach(Transform child in particleParent.transform)
 			Destroy(child.gameObject);
-
+		//Computes the percentage of total particles per grid cell
+		// at current time step
 		Dictionary<int, int> ratios = new Dictionary<int, int>();
 		Dictionary<int, Vector2> positions = new Dictionary<int, Vector2>();
 		foreach(Particle p in particles){
 			int[] pos = worldGrid.nodeFromWorldPoint(p.position).gridPosition;
 			int index = pos[1] * gx + pos[0];
-
 			if (ratios.ContainsKey(index))
 				ratios[index]++;
 			else{
@@ -54,7 +59,9 @@ public class RobotLocalize : MonoBehaviour {
 				positions[index] = p.position;
 			}
 		}
-
+		//Draws particles for current time step
+		// size based on percentage of total particles 
+		// per grid cell at current time step
 		int count = 0;
 		foreach(int k in ratios.Keys){
 			float size = ratios[k]/(float)particles.Length;
@@ -70,10 +77,13 @@ public class RobotLocalize : MonoBehaviour {
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Localization functions -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
+	//Coroutine started by "Run" button
+	//Implements Monte Carlo Localization
 	public IEnumerator TakeStep(){
+		//Choose next grid
 		Vector3 next = PickNeighbor();
 		Vector2 step = next - transform.position;
-	
+		//Update heading of robot to point at next
 		transform.rotation = Quaternion.Euler(CalculateHeading(step.x, step.y));
 		transform.position = next;
 		
@@ -85,6 +95,9 @@ public class RobotLocalize : MonoBehaviour {
 		StartCoroutine(TakeStep());
 	}
 
+	//Returns position of robots next step
+	//Choses random neighbor of previous position
+	// that is in bounds and not a wall
 	private Vector2 PickNeighbor(){
 		Node gridPos = worldGrid.nodeFromWorldPoint(transform.position);
 		int y = gridPos.gridPosition[1];
@@ -100,11 +113,11 @@ public class RobotLocalize : MonoBehaviour {
 		return options[Random.Range(0, options.Count)];
 	}
 
+	//Applies robot movement to all particles
+	//Computes prior probabilities according
+	// to the legality of each particle making that step
 	private void OdomentryProb(Vector2 dir){
 		foreach(Particle p in particles){
-			// Apply movement
-			// Check bounds
-			// Check wall
 			Node oldPos = worldGrid.nodeFromWorldPoint(p.position);
 			int x = (int) dir.x + oldPos.gridPosition[0];
 			int y = (int) dir.y + oldPos.gridPosition[1];
@@ -116,18 +129,21 @@ public class RobotLocalize : MonoBehaviour {
 		}
 	}
 
+	//Weighs odometry probabilities based on simulated
+	// IR sensor
 	private void SensorProb(){
 		RaycastHit robotHit;
 		float dist = 0;
 		if (Physics.Raycast(transform.position, transform.up, out robotHit))
 			dist = robotHit.distance;
-
+		//Compares the real robot sensor readings to what the robot
+		// would sense given at each particle position and heading
 		foreach(Particle p in particles){
 			RaycastHit pHit;
 			float pDist = 0;
 			if (Physics.Raycast(p.position, transform.up, out pHit))
 				pDist = pHit.distance;
-
+			//Weight probabilities	
 			if (dist == pDist) p.prob *= 1f;
 			else {
 				if (dist > 0 && pDist > 0) p.prob *= 0.5f;
@@ -137,6 +153,10 @@ public class RobotLocalize : MonoBehaviour {
 		
 	}
 
+	//Creates array of particles for next time step
+	// based on their weighted probabilities
+	//Replacement occurs after selection, so the same
+	// particle may be chosen multiple times
 	private void Resample(){
 		Particle[] resample = new Particle[particles.Length];
 		for(int i = 0; i < resample.Length; i++){
@@ -154,10 +174,14 @@ public class RobotLocalize : MonoBehaviour {
 		particles = resample;
 	}
 
+	//Check if x,y grid position is within bounds of map
+	// and is not a wall
 	private bool LegalStep(int x, int y){
 		return (y < gy && y >= 0 && x < gx && x >= 0 && worldGrid.grid[x, y].notWall);
 	}
 
+	//Calculates heading of robot, to point at x,y
+	// for vizualization purposes
 	private Vector3 CalculateHeading(float x, float y){
 		float rad = Mathf.Atan2(x, y);
 		float deg = rad * (180 / Mathf.PI);
