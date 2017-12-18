@@ -165,15 +165,13 @@ public class RobotLocalize : MonoBehaviour {
 		foreach(Particle p in particles){
 			RaycastHit pHit;
 			float pDist = 0;
+			//Calculate vector direction based on particle heading
 			Vector3 direction = new Vector3(-1 * Mathf.Sin(Mathf.Deg2Rad * p.heading), Mathf.Cos(Mathf.Deg2Rad * p.heading), 0);
 			if (Physics.Raycast(p.position, direction, out pHit))
 				pDist = pHit.distance;
 			//Weight probabilities	
 			if (dist == pDist) p.prob *= 1f;
-			else {
-				if (dist > 0 && pDist > 0) p.prob *= 0.5f;
-				else p.prob *= 0.15f;
-			}
+			else p.prob *= 0f;
 			if (p.prob > highestProb) highestProb = p.prob;
 		}
 		
