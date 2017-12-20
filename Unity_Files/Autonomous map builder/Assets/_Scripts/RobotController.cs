@@ -180,7 +180,9 @@ public class RobotController : MonoBehaviour {
 				}
 			}
 		}
-		//No path found, pot path to random frontier 
+		//Target is currently unreachable, set back to unknown
+		target.MakeUnknown();
+		//No path found, plot path to random frontier 
 		if (frontiers.Count > 1) return AStarPath(frontiers.GetRange(1,frontiers.Count - 1));
 		//No path found, no other frontiers
 		else{

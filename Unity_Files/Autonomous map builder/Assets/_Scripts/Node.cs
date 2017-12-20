@@ -43,6 +43,14 @@ public class Node : IComparable<Node> {
 		isFrontier = true;
 	}
 
+	//Set Node to unknown
+	public void MakeUnknown(){
+		myObject.GetComponent<Renderer>().material.color = Color.gray;
+		unknown = true;
+		notWall = true;
+		isFrontier = false;
+	}
+
 	//Set Node to known and walkable
 	public void MakeEmpty(){
 		myObject.GetComponent<Renderer>().material.color = Color.white;
@@ -56,6 +64,7 @@ public class Node : IComparable<Node> {
 		myObject.GetComponent<Renderer>().material.color = Color.black;
 		unknown = false;
 		notWall = false;
+		isFrontier = false;
 	}
 
 	//Show that this node is the robot's current location
