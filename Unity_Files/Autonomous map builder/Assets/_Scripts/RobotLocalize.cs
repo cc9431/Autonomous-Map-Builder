@@ -17,13 +17,10 @@ public class RobotLocalize : MonoBehaviour {
 	public GameObject particlePrefab;		// Particle vizualization prefab
 	public float radarStrength;				// Strength of robot's visual field
 
-	private int move_counter;
-
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
 
 	//Called when user creates robot
 	void Start(){
-		move_counter = 0;
 		particleParent = GameObject.Find("Particles");
 		worldGrid = Grid.get();
 		gx = (int) worldGrid.gridSize.x;
@@ -78,7 +75,6 @@ public class RobotLocalize : MonoBehaviour {
 		foreach(int k in ratios.Keys){
 			float size = ratios[k]/(float)particles.Count;
 			if (size == 1){ 
-				Debug.Log(move_counter);
 				worldGrid.finished();
 				StopAllCoroutines();
 			}
@@ -109,7 +105,6 @@ public class RobotLocalize : MonoBehaviour {
 		SensorProb();
 		Resample();
 		Visualize();
-		move_counter++;
 		yield return new WaitForSeconds(.5f);
 		StartCoroutine(TakeStep());
 	}

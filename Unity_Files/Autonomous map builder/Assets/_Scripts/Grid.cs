@@ -34,6 +34,7 @@ public class Grid : MonoBehaviour {
 	public Slider radarStrength;		// Reference to UI Slider
 	public Button Next;					// Reference to UI Button
 	public Button Restart;				// Reference to UI Button
+	public Button GiveUp;				// Reference to UI Button
 	public Text info;					// Reference to UI Text
 
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Unity Specific -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- //
@@ -53,6 +54,7 @@ public class Grid : MonoBehaviour {
 		nodeDiameter = nodeRadius * 2;
 		gridSize = new Vector2(10f, 10f);
 		Restart.gameObject.SetActive(false);
+		GiveUp.gameObject.SetActive(false);
 		
 		//Start simulation
 		GenerateGrid();
@@ -166,6 +168,7 @@ public class Grid : MonoBehaviour {
 
 	//Allow robots to update UI when simulation is over
 	public void finished(){
+		GiveUp.gameObject.SetActive(false);
 		Restart.gameObject.SetActive(true);
 	}
 
@@ -202,6 +205,7 @@ public class Grid : MonoBehaviour {
 		} else if (state == 3){
 			info.text = "";
 			Next.gameObject.SetActive(false);
+			GiveUp.gameObject.SetActive(true);
 			if (runType.value == 0) {
 				if (gridSize.x >= gridSize.y) camSize *= 2;
 				camPos = gridSize.x / 2 + 1;
